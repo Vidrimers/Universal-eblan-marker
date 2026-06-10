@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    http://tampermonkey.net/
-// @version      6.1
+// @version      6.3
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
 // @grant        GM_setValue
@@ -277,18 +277,10 @@
                 50% { box-shadow: 0 4px 24px rgba(255,65,108,0.4), 0 0 0 8px rgba(255,65,108,0.08); }
             }
 
-            /* ===== Overlay ===== */
+            /* ===== Overlay ===== (визуальный, не блокирующий) */
             .vm-overlay {
-                position: fixed;
-                inset: 0;
-                background: rgba(0,0,0,0.4);
-                z-index: 2147483644;
-                opacity: 0;
-                transition: opacity 0.3s;
-                display: none;
-                pointer-events: none;
+                display: none; /* оверлей полностью отключён — модалка не блокирует сайт */
             }
-            .vm-overlay.open { display: block; opacity: 1; pointer-events: auto; }
 
             /* ===== Modal ===== */
             .vm-modal {
@@ -547,6 +539,55 @@
                 font-family: monospace;
                 font-size: 12px;
             }
+            /* ===== Bulk Add ===== */
+            .vm-bulk-toggle {
+                margin-top: 10px;
+                font-size: 12px;
+                color: #667eea;
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 4px 0;
+                text-decoration: underline;
+                text-decoration-style: dotted;
+                font-family: inherit;
+                text-align: left;
+            }
+            .vm-bulk-toggle:hover { color: #a3b1ff; }
+            .vm-bulk-section {
+                display: none;
+                flex-direction: column;
+                gap: 8px;
+                margin-top: 10px;
+                padding: 14px;
+                background: rgba(102,126,234,0.06);
+                border: 1px solid rgba(102,126,234,0.2);
+                border-radius: 10px;
+            }
+            .vm-bulk-section.open { display: flex; }
+            .vm-bulk-section textarea.vm-input {
+                resize: vertical;
+                min-height: 100px;
+                font-family: monospace;
+                font-size: 12px;
+                line-height: 1.6;
+            }
+            .vm-bulk-counter {
+                font-size: 11px;
+                color: #666;
+                text-align: right;
+                margin-top: -4px;
+            }
+            .vm-bulk-counter.warn { color: #f39c12; }
+            .vm-bulk-counter.limit { color: #e74c3c; }
+            .vm-bulk-row {
+                display: flex;
+                flex-direction: row;
+                gap: 8px;
+                align-items: center;
+            }
+            .vm-bulk-row .vm-input { flex: 1; }
+
         `;
     shadow.appendChild(style);
 
@@ -582,6 +623,15 @@
                     <input class="vm-input" id="vmNewNick" placeholder="Ник">
                     <input class="vm-input" id="vmNewLabel" placeholder="Метка">
                     <button class="vm-btn vm-btn-primary" id="vmAddNick">+</button>
+                </div>
+                <button class="vm-bulk-toggle" id="vmBulkToggle">▼ Массовое добавление</button>
+                <div class="vm-bulk-section" id="vmBulkSection">
+                    <div class="vm-bulk-row">
+                        <input class="vm-input" id="vmBulkLabel" placeholder="Метка для всех ников (обязательно)">
+                    </div>
+                    <textarea class="vm-input" id="vmBulkNicks" placeholder="Ники — по одному на строку:&#10;Minor748&#10;ElSwanko&#10;suarog3&#10;..." rows="6"></textarea>
+                    <div class="vm-bulk-counter" id="vmBulkCounter">0 / 100</div>
+                    <button class="vm-btn vm-btn-primary" id="vmBulkAdd">➕ Добавить всех</button>
                 </div>
             </div>
 
@@ -678,7 +728,7 @@
     // ========== EVENTS ==========
     fab.onclick = () => openModal();
     modal.querySelector(".vm-close").onclick = () => closeModal();
-    overlay.onclick = () => closeModal();
+    // overlay.onclick убран — модалка закрывается только крестиком
 
     function openModal() {
       overlay.classList.add("open");
@@ -831,13 +881,76 @@
       const nick = modal.querySelector("#vmNewNick").value.trim();
       const label = modal.querySelector("#vmNewLabel").value.trim();
       if (!nick || !label) return showToast("Заполните оба поля", true);
+      const exists = Object.keys(DATA.nicknames).some(
+        (k) => k.toLowerCase() === nick.toLowerCase(),
+      );
       DATA.nicknames[nick] = label;
       saveData(DATA);
       pattern = buildPattern();
       modal.querySelector("#vmNewNick").value = "";
       modal.querySelector("#vmNewLabel").value = "";
       renderLists();
-      showToast("✓ Ник добавлен");
+      showToast(exists ? `⚠️ Метка "${nick}" обновлена` : "✓ Ник добавлен");
+    };
+
+    // Bulk add toggle
+    modal.querySelector("#vmBulkToggle").onclick = () => {
+      const sec = modal.querySelector("#vmBulkSection");
+      const btn = modal.querySelector("#vmBulkToggle");
+      const isOpen = sec.classList.toggle("open");
+      btn.textContent = isOpen
+        ? "▲ Массовое добавление"
+        : "▼ Массовое добавление";
+    };
+
+    // Bulk add counter
+    const bulkNicksTA = modal.querySelector("#vmBulkNicks");
+    const bulkCounter = modal.querySelector("#vmBulkCounter");
+    const MAX_BULK = 100;
+    bulkNicksTA.oninput = () => {
+      const lines = bulkNicksTA.value
+        .split("\n")
+        .filter((l) => l.trim()).length;
+      bulkCounter.textContent = `${lines} / ${MAX_BULK}`;
+      bulkCounter.className =
+        "vm-bulk-counter" +
+        (lines > MAX_BULK ? " limit" : lines > 80 ? " warn" : "");
+    };
+
+    // Bulk add submit
+    modal.querySelector("#vmBulkAdd").onclick = () => {
+      const label = modal.querySelector("#vmBulkLabel").value.trim();
+      if (!label) return showToast("Укажите метку для ников", true);
+      const lines = bulkNicksTA.value
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      if (!lines.length) return showToast("Список ников пуст", true);
+      if (lines.length > MAX_BULK)
+        return showToast(`Максимум ${MAX_BULK} ников за раз`, true);
+      let added = 0,
+        updated = 0;
+      for (const nick of lines) {
+        const exists = Object.keys(DATA.nicknames).some(
+          (k) => k.toLowerCase() === nick.toLowerCase(),
+        );
+        if (exists) {
+          updated++;
+        } else {
+          added++;
+        }
+        DATA.nicknames[nick] = label;
+      }
+      saveData(DATA);
+      pattern = buildPattern();
+      bulkNicksTA.value = "";
+      bulkCounter.textContent = `0 / ${MAX_BULK}`;
+      bulkCounter.className = "vm-bulk-counter";
+      renderLists();
+      const parts = [];
+      if (added) parts.push(`добавлено ${added}`);
+      if (updated) parts.push(`⚠️ обновлено ${updated}`);
+      showToast(`✓ ${parts.join(", ")}`);
     };
 
     // Add profile
