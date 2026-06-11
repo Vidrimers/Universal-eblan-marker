@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    http://tampermonkey.net/
-// @version      6.3
+// @version      6.4
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
 // @grant        GM_setValue
@@ -344,7 +344,7 @@
             }
             .vm-tab {
                 flex: 1;
-                padding: 10px 12px;
+                padding: 5px;
                 border: none;
                 background: transparent;
                 color: #888;
@@ -405,10 +405,11 @@
                 border: 1px solid rgba(255,255,255,0.1);
             }
             .vm-btn-ghost:hover { background: rgba(255,255,255,0.1); color: #fff; }
+            .vm-bulk-section>.vm-btn { padding: 5px; }
 
             /* ===== List Items ===== */
             .vm-list {
-                max-height: 180px;
+                max-height: 200px;
                 overflow-y: auto;
                 margin-bottom: 12px;
                 padding: 4px;
@@ -524,7 +525,7 @@
                 margin-top: 20px;
                 flex-wrap: wrap;
             }
-            .vm-footer .vm-btn { flex: 1; min-width: 120px; text-align: center; }
+            .vm-footer .vm-btn { flex: 1; min-width: 120px; text-align: center; padding: 3px 5px;}
 
             /* ===== Help ===== */
             .vm-help { font-size: 13px; line-height: 1.7; color: #ccc; }
@@ -551,7 +552,7 @@
                 text-decoration: underline;
                 text-decoration-style: dotted;
                 font-family: inherit;
-                text-align: left;
+                text-align: center;
             }
             .vm-bulk-toggle:hover { color: #a3b1ff; }
             .vm-bulk-section {
@@ -572,6 +573,7 @@
                 font-size: 12px;
                 line-height: 1.6;
             }
+            
             .vm-bulk-counter {
                 font-size: 11px;
                 color: #666;
@@ -587,6 +589,59 @@
                 align-items: center;
             }
             .vm-bulk-row .vm-input { flex: 1; }
+
+            /* ===== Search ===== */
+            .vm-search-wrap {
+                position: relative;
+                margin-bottom: 8px;
+            }
+            .vm-search-wrap::before {
+                content: "🔍";
+                position: absolute;
+                left: 10px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 12px;
+                pointer-events: none;
+            }
+            .vm-search {
+                width: 100%;
+                padding: 8px 32px 8px 32px;
+                background: rgba(0,0,0,0.4);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 8px;
+                color: #fff;
+                font-size: 12px;
+                outline: none;
+                transition: border-color 0.2s;
+                font-family: inherit;
+            }
+            .vm-search:focus { border-color: rgba(102,126,234,0.5); }
+            .vm-search::placeholder { color: #555; }
+            .vm-search-clear {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                color: #555;
+                font-size: 14px;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+                display: none;
+            }
+            .vm-search-clear.visible { display: block; }
+            .vm-search-clear:hover { color: #fff; }
+            .vm-search-count {
+                font-size: 11px;
+                color: #555;
+                text-align: right;
+                margin-top: -4px;
+                margin-bottom: 4px;
+                min-height: 14px;
+            }
 
         `;
     shadow.appendChild(style);
@@ -618,6 +673,11 @@
             </div>
 
             <div class="vm-tab-content active" data-tab="nicks">
+                <div class="vm-search-wrap">
+                    <input class="vm-search" id="vmNickSearch" placeholder="Поиск по нику или метке...">
+                    <button class="vm-search-clear" id="vmNickSearchClear">✕</button>
+                </div>
+                <div class="vm-search-count" id="vmNickSearchCount"></div>
                 <div class="vm-list" id="vmNickList"></div>
                 <div class="vm-add-row">
                     <input class="vm-input" id="vmNewNick" placeholder="Ник">
@@ -636,6 +696,11 @@
             </div>
 
             <div class="vm-tab-content" data-tab="profiles">
+                <div class="vm-search-wrap">
+                    <input class="vm-search" id="vmProfSearch" placeholder="Поиск по ID или тексту...">
+                    <button class="vm-search-clear" id="vmProfSearchClear">✕</button>
+                </div>
+                <div class="vm-search-count" id="vmProfSearchCount"></div>
                 <div class="vm-list" id="vmProfileList"></div>
                 <div class="vm-add-row">
                     <input class="vm-input" id="vmNewProfId" placeholder="ID пользователя">
@@ -692,8 +757,8 @@
                 <button class="vm-btn vm-btn-ghost" id="vmRefresh">🔄 Обновить</button>
             </div>
             <div class="vm-footer" style="margin-top:8px;">
-                <button class="vm-btn vm-btn-success" id="vmExportAll" style="opacity:0.8;">📥 Все сайты</button>
-                <button class="vm-btn vm-btn-warning" id="vmImportAll" style="opacity:0.8;">📤 Все сайты</button>
+                <button class="vm-btn vm-btn-success" id="vmExportAll" style="opacity:0.8;">📥 Экспорт всех сайтов</button>
+                <button class="vm-btn vm-btn-warning" id="vmImportAll" style="opacity:0.8;">📤 Импорт всех сайтов</button>
             </div>
         `;
     shadow.appendChild(modal);
@@ -730,6 +795,34 @@
     modal.querySelector(".vm-close").onclick = () => closeModal();
     // overlay.onclick убран — модалка закрывается только крестиком
 
+    // Search — nicks
+    const nickSearch = modal.querySelector("#vmNickSearch");
+    const nickSearchClear = modal.querySelector("#vmNickSearchClear");
+    nickSearch.oninput = () => {
+      nickSearchClear.classList.toggle("visible", nickSearch.value.length > 0);
+      renderLists();
+    };
+    nickSearchClear.onclick = () => {
+      nickSearch.value = "";
+      nickSearchClear.classList.remove("visible");
+      renderLists();
+      nickSearch.focus();
+    };
+
+    // Search — profiles
+    const profSearch = modal.querySelector("#vmProfSearch");
+    const profSearchClear = modal.querySelector("#vmProfSearchClear");
+    profSearch.oninput = () => {
+      profSearchClear.classList.toggle("visible", profSearch.value.length > 0);
+      renderLists();
+    };
+    profSearchClear.onclick = () => {
+      profSearch.value = "";
+      profSearchClear.classList.remove("visible");
+      renderLists();
+      profSearch.focus();
+    };
+
     function openModal() {
       overlay.classList.add("open");
       modal.classList.add("open");
@@ -760,9 +853,53 @@
     function renderLists() {
       const nickList = modal.querySelector("#vmNickList");
       const profList = modal.querySelector("#vmProfileList");
+      const nickQ = (modal.querySelector("#vmNickSearch").value || "")
+        .trim()
+        .toLowerCase();
+      const profQ = (modal.querySelector("#vmProfSearch").value || "")
+        .trim()
+        .toLowerCase();
+
+      const allNicks = Object.entries(DATA.nicknames);
+      const filteredNicks = nickQ
+        ? allNicks.filter(
+            ([nick, label]) =>
+              nick.toLowerCase().includes(nickQ) ||
+              label.toLowerCase().includes(nickQ),
+          )
+        : allNicks;
+
+      const allProfs = Object.entries(DATA.profileMessages);
+      const filteredProfs = profQ
+        ? allProfs.filter(
+            ([id, text]) =>
+              id.toLowerCase().includes(profQ) ||
+              text.toLowerCase().includes(profQ),
+          )
+        : allProfs;
+
+      // Счётчик для ников
+      const nickCountEl = modal.querySelector("#vmNickSearchCount");
+      if (nickQ) {
+        nickCountEl.textContent = `Найдено: ${filteredNicks.length} из ${allNicks.length}`;
+      } else {
+        nickCountEl.textContent = allNicks.length
+          ? `Всего: ${allNicks.length}`
+          : "";
+      }
+
+      // Счётчик для профилей
+      const profCountEl = modal.querySelector("#vmProfSearchCount");
+      if (profQ) {
+        profCountEl.textContent = `Найдено: ${filteredProfs.length} из ${allProfs.length}`;
+      } else {
+        profCountEl.textContent = allProfs.length
+          ? `Всего: ${allProfs.length}`
+          : "";
+      }
 
       nickList.innerHTML =
-        Object.entries(DATA.nicknames)
+        filteredNicks
           .map(
             ([nick, label]) => `
                 <div class="vm-list-item">
@@ -775,10 +912,10 @@
             `,
           )
           .join("") ||
-        '<div style="padding:12px;text-align:center;color:#555;">Пусто</div>';
+        `<div style="padding:12px;text-align:center;color:#555;">${nickQ ? "Ничего не найдено" : "Пусто"}</div>`;
 
       profList.innerHTML =
-        Object.entries(DATA.profileMessages)
+        filteredProfs
           .map(
             ([id, text]) => `
                 <div class="vm-list-item">
@@ -791,7 +928,7 @@
             `,
           )
           .join("") ||
-        '<div style="padding:12px;text-align:center;color:#555;">Пусто</div>';
+        `<div style="padding:12px;text-align:center;color:#555;">${profQ ? "Ничего не найдено" : "Пусто"}</div>`;
 
       // Nick edit handlers
       nickList.querySelectorAll(".vm-edit-btn").forEach((btn) => {
