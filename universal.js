@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    http://tampermonkey.net/
-// @version      6.5.1
+// @version      6.6
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @grant        GM_listValues
+// @grant        GM_xmlhttpRequest
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
 // @downloadURL  https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
@@ -738,6 +739,41 @@
             }
             .vm-preset-item:hover { background: rgba(102,126,234,0.15); }
 
+            /* ===== Update banner ===== */
+            .vm-update-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 10px 14px;
+                margin-bottom: 16px;
+                background: rgba(46,204,113,0.1);
+                border: 1px solid rgba(46,204,113,0.35);
+                border-radius: 10px;
+                font-size: 12px;
+                color: #2ecc71;
+                animation: vm-update-glow 2s ease-in-out infinite;
+            }
+            @keyframes vm-update-glow {
+                0%, 100% { border-color: rgba(46,204,113,0.35); }
+                50% { border-color: rgba(46,204,113,0.7); }
+            }
+            .vm-update-banner span { flex: 1; }
+            .vm-update-btn {
+                padding: 4px 12px;
+                border: 1px solid rgba(46,204,113,0.5);
+                border-radius: 6px;
+                background: rgba(46,204,113,0.15);
+                color: #2ecc71;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                font-family: inherit;
+                white-space: nowrap;
+                transition: background 0.2s;
+            }
+            .vm-update-btn:hover { background: rgba(46,204,113,0.3); }
+
             /* ===== Search ===== */
             .vm-search-wrap {
                 position: relative;
@@ -812,6 +848,11 @@
     modal.innerHTML = `
             <button class="vm-close">&times;</button>
             <h2>💀 Eblan Marker <span class="vm-domain">${escapeHtml(DOMAIN)}</span></h2>
+
+            <div id="vmUpdateBanner" style="display:none;" class="vm-update-banner">
+                <span id="vmUpdateText"></span>
+                <button class="vm-update-btn" id="vmUpdateBtn">⬆️ Установить</button>
+            </div>
 
             <div class="vm-tabs">
                 <button class="vm-tab active" data-tab="nicks">👤 Ники</button>
@@ -983,10 +1024,68 @@
       overlay.classList.add("open");
       modal.classList.add("open");
       renderLists();
+      checkForUpdates();
     }
     function closeModal() {
       overlay.classList.remove("open");
       modal.classList.remove("open");
+    }
+
+    // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
+    const CURRENT_VERSION = "6.6";
+    const UPDATE_URL = "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+    const INSTALL_URL = "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+    const UPDATE_CHECK_KEY = "vm_update_last_check";
+    const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // раз в сутки
+
+    function parseVersion(str) {
+      // "6.5.1" → [6, 5, 1]
+      return str.trim().split(".").map(Number);
+    }
+
+    function isNewer(remote, current) {
+      const r = parseVersion(remote);
+      const c = parseVersion(current);
+      for (let i = 0; i < Math.max(r.length, c.length); i++) {
+        const rv = r[i] || 0, cv = c[i] || 0;
+        if (rv > cv) return true;
+        if (rv < cv) return false;
+      }
+      return false;
+    }
+
+    function showUpdateBanner(remoteVersion) {
+      const banner = modal.querySelector("#vmUpdateBanner");
+      const text = modal.querySelector("#vmUpdateText");
+      const btn = modal.querySelector("#vmUpdateBtn");
+      text.textContent = `🆕 Доступно обновление: v${CURRENT_VERSION} → v${remoteVersion}`;
+      banner.style.display = "flex";
+      btn.onclick = () => {
+        window.open(INSTALL_URL, "_blank");
+      };
+    }
+
+    function checkForUpdates(force = false) {
+      const lastCheck = GM_getValue(UPDATE_CHECK_KEY, 0);
+      const now = Date.now();
+      if (!force && now - lastCheck < UPDATE_CHECK_INTERVAL) return;
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: UPDATE_URL + "?_=" + now, // cache bust
+        timeout: 8000,
+        onload(resp) {
+          if (resp.status !== 200) return;
+          const match = resp.responseText.match(/\/\/ @version\s+([^\s]+)/);
+          if (!match) return;
+          const remoteVersion = match[1];
+          GM_setValue(UPDATE_CHECK_KEY, now);
+          if (isNewer(remoteVersion, CURRENT_VERSION)) {
+            showUpdateBanner(remoteVersion);
+          }
+        },
+        onerror() {}, // тихо, не мешаем работе
+        ontimeout() {},
+      });
     }
 
     // Tabs
