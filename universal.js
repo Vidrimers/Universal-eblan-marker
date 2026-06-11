@@ -713,7 +713,7 @@
                 display: none;
                 position: absolute;
                 left: 0;
-                top: 22px;
+                bottom: 22px;
                 z-index: 10;
                 background: #1e1e2e;
                 border: 1px solid rgba(102,126,234,0.3);
