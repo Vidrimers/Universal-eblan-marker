@@ -139,9 +139,10 @@
     const keys = Object.keys(DATA.nicknames);
     if (!keys.length) return null;
     const escaped = keys.map(
-      (k) => `\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      (k) =>
+        `(?<![\\p{L}\\p{N}_])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_])`,
     );
-    return new RegExp(escaped.join("|"), "gi");
+    return new RegExp(escaped.join("|"), "giu");
   }
 
   let pattern = buildPattern();
