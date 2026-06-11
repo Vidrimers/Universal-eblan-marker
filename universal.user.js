@@ -532,8 +532,8 @@
             /* ===== Close btn ===== */
             .vm-close {
                 position: absolute;
-                top: 16px;
-                right: 20px;
+                top: 10px;
+                right: 10px;
                 background: none;
                 border: none;
                 color: #666;
