@@ -849,6 +849,10 @@
     const modal = document.createElement("div");
     modal.className = "vm-modal";
     modal.innerHTML = `
+    <div id="vmUpdateBanner" class="vm-update-banner" style="display:none;">
+    <span id="vmUpdateText"></span>
+    <button id="vmUpdateBtn" class="vm-update-btn">Обновить</button>
+  </div>
             <button class="vm-close">&times;</button>
             <h2>💀 Eblan Marker <span class="vm-domain">${escapeHtml(DOMAIN)}</span></h2>
 
@@ -959,7 +963,7 @@
             <div class="vm-footer" style="margin-top:8px;">
                 <button class="vm-btn vm-btn-success" id="vmExportAll">📥 Экспорт всех сайтов</button>
                 <button class="vm-btn vm-btn-warning" id="vmImportAll">📤 Импорт всех сайтов</button>
-                <button class="vm-btn vm-btn-report" id="vmReport" target="_blank">🐛 Сообщить об ошибке</button>
+                <button class="vm-btn vm-btn-report" id="vmReport" target="_blank">🐛 Багрепорт</button>
             </div>
         `;
     shadow.appendChild(modal);
@@ -1062,14 +1066,17 @@
     }
 
     function showUpdateBanner(remoteVersion) {
-      const banner = modal.querySelector("#vmUpdateBanner");
-      const text = modal.querySelector("#vmUpdateText");
-      const btn = modal.querySelector("#vmUpdateBtn");
-      text.textContent = `🆕 Доступно обновление: v${CURRENT_VERSION} → v${remoteVersion}`;
-      banner.style.display = "flex";
-      btn.onclick = () => {
-        window.open(INSTALL_URL, "_blank");
-      };
+      try {
+        const banner = modal.querySelector("#vmUpdateBanner");
+        const text = modal.querySelector("#vmUpdateText");
+        const btn = modal.querySelector("#vmUpdateBtn");
+        if (!banner || !text || !btn) return; // защита
+        text.textContent = `🆕 Доступно обновление: v${CURRENT_VERSION} → v${remoteVersion}`;
+        banner.style.display = "flex";
+        btn.onclick = () => window.open(INSTALL_URL, "_blank");
+      } catch (e) {
+        console.warn("[Marker] Ошибка показа баннера:", e);
+      }
     }
 
     function checkForUpdates(force = false) {
