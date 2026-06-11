@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    https://github.com/Vidrimers/Universal-eblan-marker
-// @version      6.6.1
+// @version      6.6.2
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @author       Vidrimers
 // @match        *://*/*
@@ -1036,7 +1036,7 @@
     }
 
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
-    const CURRENT_VERSION = "6.6.1";
+    const CURRENT_VERSION = "6.6.2";
     const UPDATE_URL =
       "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js";
     const INSTALL_URL =
