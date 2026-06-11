@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/Vidrimers/Universal-eblan-marker
 // @version      6.6
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
@@ -1033,8 +1033,10 @@
 
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
     const CURRENT_VERSION = "6.6";
-    const UPDATE_URL = "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
-    const INSTALL_URL = "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+    const UPDATE_URL =
+      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+    const INSTALL_URL =
+      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
     const UPDATE_CHECK_KEY = "vm_update_last_check";
     const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // раз в сутки
 
@@ -1047,7 +1049,8 @@
       const r = parseVersion(remote);
       const c = parseVersion(current);
       for (let i = 0; i < Math.max(r.length, c.length); i++) {
-        const rv = r[i] || 0, cv = c[i] || 0;
+        const rv = r[i] || 0,
+          cv = c[i] || 0;
         if (rv > cv) return true;
         if (rv < cv) return false;
       }
