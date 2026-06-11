@@ -426,6 +426,7 @@
             .vm-btn-success { background: #2ecc71; color: white; }
             .vm-btn-warning { background: #f39c12; color: white; }
             .vm-btn-danger { background: #e74c3c; color: white; }
+            .vm-btn-report { background: #f312da;; color: white; }
             .vm-btn-ghost {
                 background: rgba(255,255,255,0.05);
                 color: #aaa;
@@ -956,8 +957,9 @@
                 <button class="vm-btn vm-btn-ghost" id="vmRefresh">🔄 Обновить</button>
             </div>
             <div class="vm-footer" style="margin-top:8px;">
-                <button class="vm-btn vm-btn-success" id="vmExportAll" style="opacity:0.8;">📥 Экспорт всех сайтов</button>
-                <button class="vm-btn vm-btn-warning" id="vmImportAll" style="opacity:0.8;">📤 Импорт всех сайтов</button>
+                <button class="vm-btn vm-btn-success" id="vmExportAll">📥 Экспорт всех сайтов</button>
+                <button class="vm-btn vm-btn-warning" id="vmImportAll">📤 Импорт всех сайтов</button>
+                <button class="vm-btn vm-btn-report" id="vmReport" target="_blank">🐛 Сообщить об ошибке</button>
             </div>
         `;
     shadow.appendChild(modal);
