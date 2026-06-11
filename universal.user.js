@@ -3,6 +3,7 @@
 // @namespace    https://github.com/Vidrimers/Universal-eblan-marker
 // @version      6.6
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
+// @author       Vidrimers
 // @match        *://*/*
 // @grant        GM_setValue
 // @grant        GM_getValue
