@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    http://tampermonkey.net/
-// @version      6.5
+// @version      6.5.1
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
 // @grant        GM_setValue
@@ -831,11 +831,13 @@
                     <input type="color" class="vm-color-pick" id="vmNewNickColor" title="Цвет метки (оставь дефолтный или выбери свой)">
                     <button class="vm-btn vm-btn-primary" id="vmAddNick">+</button>
                 </div>
-                <div class="vm-presets-wrap">
-                    <button class="vm-presets-btn" id="vmPresetsBtn">▾ Быстрые метки</button>
-                    <div class="vm-presets-list" id="vmPresetsList"></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+                    <div class="vm-presets-wrap">
+                        <button class="vm-presets-btn" id="vmPresetsBtn">▾ Быстрые метки</button>
+                        <div class="vm-presets-list" id="vmPresetsList"></div>
+                    </div>
+                    <button class="vm-bulk-toggle" id="vmBulkToggle">▼ Массовое добавление</button>
                 </div>
-                <button class="vm-bulk-toggle" id="vmBulkToggle">▼ Массовое добавление</button>
                 <div class="vm-bulk-section" id="vmBulkSection">
                     <div class="vm-bulk-row">
                         <input class="vm-input" id="vmBulkLabel" placeholder="Метка для всех ников (обязательно)">
@@ -1014,11 +1016,15 @@
 
       const allNicks = Object.entries(DATA.nicknames);
       const filteredNicks = nickQ
-        ? allNicks.filter(
-            ([nick, label]) =>
+        ? allNicks.filter(([nick, nd]) => {
+            const lbl = typeof nd === "string" ? nd : nd.label || "";
+            const note = typeof nd === "object" ? nd.note || "" : "";
+            return (
               nick.toLowerCase().includes(nickQ) ||
-              label.toLowerCase().includes(nickQ),
-          )
+              lbl.toLowerCase().includes(nickQ) ||
+              note.toLowerCase().includes(nickQ)
+            );
+          })
         : allNicks;
 
       const allProfs = Object.entries(DATA.profileMessages);
@@ -1070,7 +1076,7 @@
                             <button class="vm-delete-btn" data-nick="${escapeHtml(nick)}">✕</button>
                         </span>
                     </div>
-                    <div class="vm-note-panel" id="vm-note-${escapeHtml(nick)}">
+                    <div class="vm-note-panel" data-note-panel="${escapeHtml(nick)}">
                         <textarea placeholder="Заметка о нике...">${escapeHtml(d.note || "")}</textarea>
                         <button class="vm-btn vm-btn-primary vm-note-save" data-save-nick="${escapeHtml(nick)}">✓</button>
                     </div>
@@ -1103,22 +1109,26 @@
           const oldLabel = btn.dataset.label;
           const oldColor = btn.dataset.color || DATA.settings.nickColor;
           const oldNote = (getNickData(oldNick) || {}).note || "";
-          btn.closest(".vm-list-item").outerHTML = `
-                        <div class="vm-edit-row" data-editing-nick="${escapeHtml(oldNick)}" style="flex-wrap:wrap;gap:6px;">
-                            <input class="vm-input vm-edit-nick" value="${escapeHtml(oldNick)}" placeholder="Ник" style="flex:1;min-width:80px;">
-                            <input class="vm-input vm-edit-label" value="${escapeHtml(oldLabel)}" placeholder="Метка" style="flex:1;min-width:80px;">
-                            <input type="color" class="vm-color-pick vm-edit-color" value="${escapeHtml(oldColor)}" title="Цвет" style="width:36px;height:32px;flex-shrink:0;">
-                            <button class="vm-btn vm-btn-primary vm-save-nick">✓</button>
-                            <button class="vm-btn vm-btn-ghost vm-cancel-nick">✕</button>
-                        </div>
-                    `;
-          const row = nickList.querySelector(
-            `[data-editing-nick="${escapeHtml(oldNick)}"]`,
-          );
-          row.querySelector(".vm-save-nick").onclick = () => {
-            const newNick = row.querySelector(".vm-edit-nick").value.trim();
-            const newLabel = row.querySelector(".vm-edit-label").value.trim();
-            const newColor = row.querySelector(".vm-edit-color").value;
+          // Заменяем всю обёртку (wrap = list-item + note-panel)
+          const wrap = btn.closest(".vm-list-item-wrap");
+          const editRow = document.createElement("div");
+          editRow.className = "vm-edit-row";
+          editRow.dataset.editingNick = oldNick;
+          editRow.style.cssText = "flex-wrap:wrap;gap:6px;";
+          editRow.innerHTML = `
+            <input class="vm-input vm-edit-nick" value="${escapeHtml(oldNick)}" placeholder="Ник" style="flex:1;min-width:80px;">
+            <input class="vm-input vm-edit-label" value="${escapeHtml(oldLabel)}" placeholder="Метка" style="flex:1;min-width:80px;">
+            <input type="color" class="vm-color-pick vm-edit-color" value="${escapeHtml(oldColor)}" title="Цвет" style="width:36px;height:32px;flex-shrink:0;">
+            <button class="vm-btn vm-btn-primary vm-save-nick">✓</button>
+            <button class="vm-btn vm-btn-ghost vm-cancel-nick">✕</button>
+          `;
+          wrap.replaceWith(editRow);
+          editRow.querySelector(".vm-save-nick").onclick = () => {
+            const newNick = editRow.querySelector(".vm-edit-nick").value.trim();
+            const newLabel = editRow
+              .querySelector(".vm-edit-label")
+              .value.trim();
+            const newColor = editRow.querySelector(".vm-edit-color").value;
             if (!newNick || !newLabel)
               return showToast("Заполните оба поля", true);
             delete DATA.nicknames[oldNick];
@@ -1132,7 +1142,8 @@
             renderLists();
             showToast("✓ Изменено");
           };
-          row.querySelector(".vm-cancel-nick").onclick = () => renderLists();
+          editRow.querySelector(".vm-cancel-nick").onclick = () =>
+            renderLists();
         };
       });
 
@@ -1141,7 +1152,7 @@
         btn.onclick = (e) => {
           e.stopPropagation();
           const nick = btn.dataset.noteNick;
-          const panel = nickList.querySelector(`#vm-note-${CSS.escape(nick)}`);
+          const panel = nickList.querySelector(`[data-note-panel="${nick}"]`);
           if (!panel) return;
           const isOpen = panel.classList.toggle("open");
           if (isOpen) panel.querySelector("textarea").focus();
@@ -1152,7 +1163,7 @@
       nickList.querySelectorAll(".vm-note-save").forEach((btn) => {
         btn.onclick = () => {
           const nick = btn.dataset.saveNick;
-          const panel = nickList.querySelector(`#vm-note-${CSS.escape(nick)}`);
+          const panel = nickList.querySelector(`[data-note-panel="${nick}"]`);
           const note = panel.querySelector("textarea").value.trim();
           const d = getNickData(nick) || { label: "", color: null, note: "" };
           DATA.nicknames[nick] = { label: d.label, color: d.color, note };
