@@ -46,7 +46,7 @@ Userscript для Tampermonkey — подсвечивает ники и оста
 
 ![alt](img/fab.png)
 
-![alt](img/modal_overview.png)
+<!-- ![alt](img/modal_overview.png) -->
 
 ---
 
