@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    http://tampermonkey.net/
-// @version      6.4
+// @version      6.5
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @match        *://*/*
 // @grant        GM_setValue
@@ -22,8 +22,7 @@
   // ========== ХРАНИЛИЩЕ ==========
   function loadData() {
     const raw = GM_getValue(STORAGE_KEY, null);
-    if (raw) return JSON.parse(raw);
-    return {
+    const def = {
       nicknames: {},
       profileMessages: {},
       settings: {
@@ -38,6 +37,27 @@
         userIdPatterns: ["[?&]u=(\\d+)", "/profile/(\\d+)", "/member/(\\d+)"],
       },
     };
+    if (!raw) return def;
+    const parsed = JSON.parse(raw);
+    // Миграция: если значение ника — строка, конвертируем в объект
+    for (const [k, v] of Object.entries(parsed.nicknames || {})) {
+      if (typeof v === "string") {
+        parsed.nicknames[k] = { label: v, color: null, note: "" };
+      }
+    }
+    return parsed;
+  }
+
+  // Получить объект ника (с fallback для старых данных)
+  function getNickData(nick) {
+    const low = nick.toLowerCase();
+    for (const [k, v] of Object.entries(DATA.nicknames)) {
+      if (k.toLowerCase() === low) {
+        if (typeof v === "string") return { label: v, color: null, note: "" };
+        return v;
+      }
+    }
+    return null;
   }
 
   function saveData(data) {
@@ -123,11 +143,13 @@
   let pattern = buildPattern();
 
   function getLabelFor(nick) {
-    const low = nick.toLowerCase();
-    for (const [k, v] of Object.entries(DATA.nicknames)) {
-      if (k.toLowerCase() === low) return v;
-    }
-    return "";
+    const d = getNickData(nick);
+    return d ? d.label : "";
+  }
+
+  function getColorFor(nick) {
+    const d = getNickData(nick);
+    return d && d.color ? d.color : DATA.settings.nickColor;
   }
 
   function processNode(node) {
@@ -179,7 +201,7 @@
         span.appendChild(document.createTextNode(p.c));
         const tag = document.createElement("span");
         tag.textContent = ` (${p.label})`;
-        tag.style.color = DATA.settings.nickColor;
+        tag.style.color = getColorFor(p.c);
         if (DATA.settings.nickBold) tag.style.fontWeight = "bold";
         span.appendChild(tag);
       }
@@ -590,6 +612,130 @@
             }
             .vm-bulk-row .vm-input { flex: 1; }
 
+            /* ===== Nick color swatch in list ===== */
+            .vm-nick-color-dot {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-right: 6px;
+                flex-shrink: 0;
+                border: 1px solid rgba(255,255,255,0.15);
+                vertical-align: middle;
+            }
+            /* ===== Note dot ===== */
+            .vm-note-dot {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: rgba(102,126,234,0.25);
+                color: #a3b1ff;
+                font-size: 10px;
+                cursor: pointer;
+                margin-left: 6px;
+                flex-shrink: 0;
+                border: 1px solid rgba(102,126,234,0.3);
+                transition: background 0.2s;
+                line-height: 1;
+            }
+            .vm-note-dot:hover { background: rgba(102,126,234,0.45); }
+            /* ===== Note panel (inline under list item) ===== */
+            .vm-note-panel {
+                display: none;
+                padding: 8px 12px;
+                background: rgba(102,126,234,0.06);
+                border-left: 2px solid rgba(102,126,234,0.3);
+                border-radius: 0 0 8px 8px;
+                margin-top: -4px;
+                margin-bottom: 4px;
+            }
+            .vm-note-panel.open { display: flex; gap: 6px; align-items: flex-start; }
+            .vm-note-panel textarea {
+                flex: 1;
+                min-height: 56px;
+                resize: vertical;
+                font-family: inherit;
+                font-size: 12px;
+                line-height: 1.5;
+                padding: 6px 8px;
+                background: rgba(0,0,0,0.35);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 6px;
+                color: #ddd;
+                outline: none;
+            }
+            .vm-note-panel textarea:focus { border-color: rgba(102,126,234,0.5); }
+            .vm-note-save {
+                padding: 5px 10px;
+                font-size: 12px;
+                flex-shrink: 0;
+            }
+            /* ===== Add row with color picker ===== */
+            .vm-add-row-color {
+                display: flex;
+                flex-direction: row;
+                gap: 8px;
+                margin-top: 8px;
+                align-items: center;
+            }
+            .vm-add-row-color .vm-input { flex: 1; }
+            .vm-color-pick {
+                width: 36px;
+                height: 38px;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                cursor: pointer;
+                background: none;
+                flex-shrink: 0;
+                padding: 2px;
+            }
+            /* ===== Preset labels dropdown ===== */
+            .vm-presets-wrap {
+                position: relative;
+                margin-top: 6px;
+            }
+            .vm-presets-btn {
+                font-size: 11px;
+                color: #667eea;
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 2px 0;
+                font-family: inherit;
+                text-decoration: underline;
+                text-decoration-style: dotted;
+            }
+            .vm-presets-btn:hover { color: #a3b1ff; }
+            .vm-presets-list {
+                display: none;
+                position: absolute;
+                left: 0;
+                top: 22px;
+                z-index: 10;
+                background: #1e1e2e;
+                border: 1px solid rgba(102,126,234,0.3);
+                border-radius: 8px;
+                padding: 4px;
+                min-width: 180px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            }
+            .vm-presets-list.open { display: block; }
+            .vm-preset-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+                color: #ddd;
+                transition: background 0.15s;
+            }
+            .vm-preset-item:hover { background: rgba(102,126,234,0.15); }
+
             /* ===== Search ===== */
             .vm-search-wrap {
                 position: relative;
@@ -679,15 +825,21 @@
                 </div>
                 <div class="vm-search-count" id="vmNickSearchCount"></div>
                 <div class="vm-list" id="vmNickList"></div>
-                <div class="vm-add-row">
+                <div class="vm-add-row-color">
                     <input class="vm-input" id="vmNewNick" placeholder="Ник">
                     <input class="vm-input" id="vmNewLabel" placeholder="Метка">
+                    <input type="color" class="vm-color-pick" id="vmNewNickColor" title="Цвет метки (оставь дефолтный или выбери свой)">
                     <button class="vm-btn vm-btn-primary" id="vmAddNick">+</button>
+                </div>
+                <div class="vm-presets-wrap">
+                    <button class="vm-presets-btn" id="vmPresetsBtn">▾ Быстрые метки</button>
+                    <div class="vm-presets-list" id="vmPresetsList"></div>
                 </div>
                 <button class="vm-bulk-toggle" id="vmBulkToggle">▼ Массовое добавление</button>
                 <div class="vm-bulk-section" id="vmBulkSection">
                     <div class="vm-bulk-row">
                         <input class="vm-input" id="vmBulkLabel" placeholder="Метка для всех ников (обязательно)">
+                        <input type="color" class="vm-color-pick" id="vmBulkColor" title="Цвет метки">
                     </div>
                     <textarea class="vm-input" id="vmBulkNicks" placeholder="Ники — по одному на строку:&#10;Minor748&#10;ElSwanko&#10;suarog3&#10;..." rows="6"></textarea>
                     <div class="vm-bulk-counter" id="vmBulkCounter">0 / 100</div>
@@ -900,17 +1052,31 @@
 
       nickList.innerHTML =
         filteredNicks
-          .map(
-            ([nick, label]) => `
-                <div class="vm-list-item">
-                    <span class="vm-list-item-text"><strong>${escapeHtml(nick)}</strong><span class="vm-arrow">→</span>${escapeHtml(label)}</span>
-                    <span class="vm-item-actions">
-                        <button class="vm-edit-btn" data-nick="${escapeHtml(nick)}" data-label="${escapeHtml(label)}">✎</button>
-                        <button class="vm-delete-btn" data-nick="${escapeHtml(nick)}">✕</button>
-                    </span>
+          .map(([nick, nd]) => {
+            const d =
+              typeof nd === "string"
+                ? { label: nd, color: null, note: "" }
+                : nd;
+            const color = d.color || DATA.settings.nickColor;
+            const hasNote = d.note && d.note.trim();
+            return `
+                <div class="vm-list-item-wrap">
+                    <div class="vm-list-item" data-nick-row="${escapeHtml(nick)}">
+                        <span class="vm-list-item-text">
+                            <span class="vm-nick-color-dot" style="background:${escapeHtml(color)}"></span><strong>${escapeHtml(nick)}</strong><span class="vm-arrow">→</span>${escapeHtml(d.label)}${hasNote ? `<button class="vm-note-dot" data-note-nick="${escapeHtml(nick)}" title="Заметка">✎</button>` : `<button class="vm-note-dot vm-note-add" data-note-nick="${escapeHtml(nick)}" title="Добавить заметку" style="opacity:0.35;">+</button>`}
+                        </span>
+                        <span class="vm-item-actions">
+                            <button class="vm-edit-btn" data-nick="${escapeHtml(nick)}" data-label="${escapeHtml(d.label)}" data-color="${escapeHtml(color)}">✎</button>
+                            <button class="vm-delete-btn" data-nick="${escapeHtml(nick)}">✕</button>
+                        </span>
+                    </div>
+                    <div class="vm-note-panel" id="vm-note-${escapeHtml(nick)}">
+                        <textarea placeholder="Заметка о нике...">${escapeHtml(d.note || "")}</textarea>
+                        <button class="vm-btn vm-btn-primary vm-note-save" data-save-nick="${escapeHtml(nick)}">✓</button>
+                    </div>
                 </div>
-            `,
-          )
+            `;
+          })
           .join("") ||
         `<div style="padding:12px;text-align:center;color:#555;">${nickQ ? "Ничего не найдено" : "Пусто"}</div>`;
 
@@ -935,10 +1101,13 @@
         btn.onclick = () => {
           const oldNick = btn.dataset.nick;
           const oldLabel = btn.dataset.label;
+          const oldColor = btn.dataset.color || DATA.settings.nickColor;
+          const oldNote = (getNickData(oldNick) || {}).note || "";
           btn.closest(".vm-list-item").outerHTML = `
-                        <div class="vm-edit-row" data-editing-nick="${escapeHtml(oldNick)}">
-                            <input class="vm-input vm-edit-nick" value="${escapeHtml(oldNick)}" placeholder="Ник">
-                            <input class="vm-input vm-edit-label" value="${escapeHtml(oldLabel)}" placeholder="Метка">
+                        <div class="vm-edit-row" data-editing-nick="${escapeHtml(oldNick)}" style="flex-wrap:wrap;gap:6px;">
+                            <input class="vm-input vm-edit-nick" value="${escapeHtml(oldNick)}" placeholder="Ник" style="flex:1;min-width:80px;">
+                            <input class="vm-input vm-edit-label" value="${escapeHtml(oldLabel)}" placeholder="Метка" style="flex:1;min-width:80px;">
+                            <input type="color" class="vm-color-pick vm-edit-color" value="${escapeHtml(oldColor)}" title="Цвет" style="width:36px;height:32px;flex-shrink:0;">
                             <button class="vm-btn vm-btn-primary vm-save-nick">✓</button>
                             <button class="vm-btn vm-btn-ghost vm-cancel-nick">✕</button>
                         </div>
@@ -949,16 +1118,47 @@
           row.querySelector(".vm-save-nick").onclick = () => {
             const newNick = row.querySelector(".vm-edit-nick").value.trim();
             const newLabel = row.querySelector(".vm-edit-label").value.trim();
+            const newColor = row.querySelector(".vm-edit-color").value;
             if (!newNick || !newLabel)
               return showToast("Заполните оба поля", true);
             delete DATA.nicknames[oldNick];
-            DATA.nicknames[newNick] = newLabel;
+            DATA.nicknames[newNick] = {
+              label: newLabel,
+              color: newColor,
+              note: oldNote,
+            };
             saveData(DATA);
             pattern = buildPattern();
             renderLists();
             showToast("✓ Изменено");
           };
           row.querySelector(".vm-cancel-nick").onclick = () => renderLists();
+        };
+      });
+
+      // Note dot handlers
+      nickList.querySelectorAll(".vm-note-dot, .vm-note-add").forEach((btn) => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const nick = btn.dataset.noteNick;
+          const panel = nickList.querySelector(`#vm-note-${CSS.escape(nick)}`);
+          if (!panel) return;
+          const isOpen = panel.classList.toggle("open");
+          if (isOpen) panel.querySelector("textarea").focus();
+        };
+      });
+
+      // Note save handlers
+      nickList.querySelectorAll(".vm-note-save").forEach((btn) => {
+        btn.onclick = () => {
+          const nick = btn.dataset.saveNick;
+          const panel = nickList.querySelector(`#vm-note-${CSS.escape(nick)}`);
+          const note = panel.querySelector("textarea").value.trim();
+          const d = getNickData(nick) || { label: "", color: null, note: "" };
+          DATA.nicknames[nick] = { label: d.label, color: d.color, note };
+          saveData(DATA);
+          renderLists();
+          showToast(note ? "✓ Заметка сохранена" : "✓ Заметка удалена");
         };
       });
 
@@ -1013,22 +1213,87 @@
       });
     }
 
+    // Инициализировать color picker дефолтным цветом из настроек
+    const newNickColorInput = modal.querySelector("#vmNewNickColor");
+    newNickColorInput.value = DATA.settings.nickColor;
+
     // Add nick
     modal.querySelector("#vmAddNick").onclick = () => {
       const nick = modal.querySelector("#vmNewNick").value.trim();
       const label = modal.querySelector("#vmNewLabel").value.trim();
+      const color = modal.querySelector("#vmNewNickColor").value;
       if (!nick || !label) return showToast("Заполните оба поля", true);
       const exists = Object.keys(DATA.nicknames).some(
         (k) => k.toLowerCase() === nick.toLowerCase(),
       );
-      DATA.nicknames[nick] = label;
+      const oldNote = exists ? (getNickData(nick) || {}).note || "" : "";
+      DATA.nicknames[nick] = { label, color, note: oldNote };
       saveData(DATA);
       pattern = buildPattern();
       modal.querySelector("#vmNewNick").value = "";
       modal.querySelector("#vmNewLabel").value = "";
+      // color picker остаётся — удобно добавлять несколько ников с одним цветом
       renderLists();
       showToast(exists ? `⚠️ Метка "${nick}" обновлена` : "✓ Ник добавлен");
     };
+
+    // Init bulk color picker
+    modal.querySelector("#vmBulkColor").value = DATA.settings.nickColor;
+
+    // Presets dropdown — уникальные метки из существующих ников
+    function renderPresets() {
+      const list = modal.querySelector("#vmPresetsList");
+      const unique = [
+        ...new Set(
+          Object.values(DATA.nicknames).map((v) =>
+            typeof v === "string" ? v : v.label,
+          ),
+        ),
+      ]
+        .filter(Boolean)
+        .sort();
+      if (!unique.length) {
+        list.innerHTML =
+          '<div style="padding:8px 10px;font-size:12px;color:#555;">Нет сохранённых меток</div>';
+        return;
+      }
+      list.innerHTML = unique
+        .map((lbl) => {
+          // найдём цвет первого ника с этой меткой
+          let col = DATA.settings.nickColor;
+          for (const [, v] of Object.entries(DATA.nicknames)) {
+            const d = typeof v === "string" ? { label: v, color: null } : v;
+            if (d.label === lbl && d.color) {
+              col = d.color;
+              break;
+            }
+          }
+          return `<div class="vm-preset-item" data-preset-label="${escapeHtml(lbl)}" data-preset-color="${escapeHtml(col)}">
+          <span class="vm-nick-color-dot" style="background:${escapeHtml(col)}"></span>${escapeHtml(lbl)}
+        </div>`;
+        })
+        .join("");
+      list.querySelectorAll(".vm-preset-item").forEach((item) => {
+        item.onclick = () => {
+          modal.querySelector("#vmNewLabel").value = item.dataset.presetLabel;
+          modal.querySelector("#vmNewNickColor").value =
+            item.dataset.presetColor;
+          list.classList.remove("open");
+          modal.querySelector("#vmNewNick").focus();
+        };
+      });
+    }
+    modal.querySelector("#vmPresetsBtn").onclick = (e) => {
+      e.stopPropagation();
+      renderPresets();
+      modal.querySelector("#vmPresetsList").classList.toggle("open");
+    };
+    // Закрыть список при клике в другое место внутри модалки
+    modal.addEventListener("click", (e) => {
+      if (!e.target.closest(".vm-presets-wrap")) {
+        modal.querySelector("#vmPresetsList").classList.remove("open");
+      }
+    });
 
     // Bulk add toggle
     modal.querySelector("#vmBulkToggle").onclick = () => {
@@ -1065,6 +1330,7 @@
       if (!lines.length) return showToast("Список ников пуст", true);
       if (lines.length > MAX_BULK)
         return showToast(`Максимум ${MAX_BULK} ников за раз`, true);
+      const bulkColor = modal.querySelector("#vmBulkColor").value;
       let added = 0,
         updated = 0;
       for (const nick of lines) {
@@ -1076,7 +1342,8 @@
         } else {
           added++;
         }
-        DATA.nicknames[nick] = label;
+        const oldNote = exists ? (getNickData(nick) || {}).note || "" : "";
+        DATA.nicknames[nick] = { label, color: bulkColor, note: oldNote };
       }
       saveData(DATA);
       pattern = buildPattern();
@@ -1119,7 +1386,14 @@
       showToast("✓ Настройки сохранены");
     };
 
-    modal.querySelector("#vmNickColor").onchange = saveSettings;
+    modal.querySelector("#vmNickColor").onchange = () => {
+      saveSettings();
+      // Обновляем color picker в форме добавления ника, если пользователь не менял его вручную
+      modal.querySelector("#vmNewNickColor").value =
+        modal.querySelector("#vmNickColor").value;
+      modal.querySelector("#vmBulkColor").value =
+        modal.querySelector("#vmNickColor").value;
+    };
     modal.querySelector("#vmCenterColor").onchange = saveSettings;
     modal.querySelector("#vmCenterBorder").onchange = saveSettings;
     modal.querySelector("#vmCenterSize").onchange = saveSettings;
