@@ -9,6 +9,8 @@
 // @grant        GM_addStyle
 // @grant        GM_listValues
 // @run-at       document-end
+// @updateURL    https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
+// @downloadURL  https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
 // ==/UserScript==
 
 (function () {
