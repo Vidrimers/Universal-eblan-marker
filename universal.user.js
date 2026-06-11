@@ -915,10 +915,18 @@
                 <div id="vmSteamQuickAdd" style="display:none;margin-top:8px;">
                     <div style="padding:10px 12px;background:rgba(23,111,158,0.12);border:1px solid rgba(23,111,158,0.3);border-radius:10px;">
                         <div style="font-size:12px;color:#5dade2;margin-bottom:8px;">⚡ Страница Steam — ID определён автоматически</div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
                             <span style="font-size:11px;color:#666;" id="vmSteamDetectedId"></span>
-                            <input class="vm-input" id="vmSteamQuickText" placeholder="Метка" style="flex:1;">
-                            <button class="vm-btn vm-btn-primary" id="vmSteamQuickBtn">➕ Добавить</button>
+                            <input class="vm-input" id="vmSteamQuickText" placeholder="Метка для профиля" style="flex:1;">
+                            <button class="vm-btn vm-btn-primary" id="vmSteamQuickBtn">➕ Профиль</button>
+                        </div>
+                        <div style="border-top:1px solid rgba(23,111,158,0.2);padding-top:8px;">
+                            <div style="font-size:11px;color:#666;margin-bottom:6px;" id="vmSteamNickInfo">⏳ Получаем текущий ник...</div>
+                            <div style="display:flex;gap:8px;align-items:center;" id="vmSteamNickRow" style="display:none;">
+                                <input class="vm-input" id="vmSteamNickLabel" placeholder="Метка для ника" style="flex:1;">
+                                <input type="color" class="vm-color-pick" id="vmSteamNickColor" title="Цвет метки" style="width:36px;height:32px;flex-shrink:0;">
+                                <button class="vm-btn vm-btn-primary" id="vmSteamNickBtn">➕ Ник</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1065,7 +1073,7 @@
         steamId64 = unsafeWindow.g_steamID || null;
       } catch (e) {}
 
-      // Если g_steamID не нашли — ищем в HTML (data-атрибуты или inline JS)
+      // Если g_steamID не нашли — ищем в HTML
       if (!steamId64) {
         const m = document.documentElement.innerHTML.match(
           /"steamid"\s*:\s*"(\d{17})"/,
@@ -1075,25 +1083,31 @@
 
       if (!steamId64) return; // не страница профиля
 
-      // Показываем блок быстрого добавления
       const quickBlock = modal.querySelector("#vmSteamQuickAdd");
       const idLabel = modal.querySelector("#vmSteamDetectedId");
       const quickText = modal.querySelector("#vmSteamQuickText");
       const quickBtn = modal.querySelector("#vmSteamQuickBtn");
+      const nickInfo = modal.querySelector("#vmSteamNickInfo");
+      const nickRow = modal.querySelector("#vmSteamNickRow");
+      const nickLabel = modal.querySelector("#vmSteamNickLabel");
+      const nickColor = modal.querySelector("#vmSteamNickColor");
+      const nickBtn = modal.querySelector("#vmSteamNickBtn");
 
       if (!quickBlock) return;
+
       idLabel.textContent = `SteamID64: ${steamId64}`;
       quickBlock.style.display = "block";
+      nickColor.value = DATA.settings.nickColor;
 
+      // ── Добавить профиль ──
       quickBtn.onclick = () => {
         const text = quickText.value.trim();
-        if (!text) return showToast("Укажи метку", true);
+        if (!text) return showToast("Укажи метку для профиля", true);
         const exists = !!DATA.profileMessages[steamId64];
         DATA.profileMessages[steamId64] = text;
         saveData(DATA);
         quickText.value = "";
         renderLists();
-        // Автоматически переключаемся на таб профилей если не там
         modal
           .querySelectorAll(".vm-tab")
           .forEach((t) => t.classList.remove("active"));
@@ -1106,7 +1120,75 @@
         modal
           .querySelector(".vm-tab-content[data-tab='profiles']")
           .classList.add("active");
-        showToast(exists ? `⚠️ Профиль обновлён` : `✓ Профиль добавлен`);
+        showToast(exists ? "⚠️ Профиль обновлён" : "✓ Профиль добавлен");
+      };
+
+      // ── Получить текущий ник через прокси ──
+      const PROXY = "http://89.124.70.156:3000/api/steam/name/";
+      let currentNick = null;
+
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: PROXY + steamId64,
+        timeout: 6000,
+        onload(resp) {
+          if (resp.status !== 200) {
+            nickInfo.textContent =
+              "⚠️ Не удалось получить ник (профиль приватный?)";
+            return;
+          }
+          try {
+            const data = JSON.parse(resp.responseText);
+            currentNick = data.name;
+            nickInfo.textContent = `Текущий ник: ${currentNick}`;
+            nickInfo.style.color = "#a3b1ff";
+            nickRow.style.display = "flex";
+          } catch (e) {
+            nickInfo.textContent = "⚠️ Ошибка разбора ответа";
+          }
+        },
+        onerror() {
+          nickInfo.textContent = "⚠️ Сервер недоступен";
+        },
+        ontimeout() {
+          nickInfo.textContent = "⚠️ Таймаут запроса";
+        },
+      });
+
+      // ── Добавить ник ──
+      nickBtn.onclick = () => {
+        if (!currentNick) return showToast("Ник ещё не загружен", true);
+        const label = nickLabel.value.trim();
+        if (!label) return showToast("Укажи метку для ника", true);
+        const color = nickColor.value;
+        const exists = Object.keys(DATA.nicknames).some(
+          (k) => k.toLowerCase() === currentNick.toLowerCase(),
+        );
+        const oldNote = exists
+          ? (getNickData(currentNick) || {}).note || ""
+          : "";
+        DATA.nicknames[currentNick] = { label, color, note: oldNote };
+        saveData(DATA);
+        pattern = buildPattern();
+        nickLabel.value = "";
+        renderLists();
+        modal
+          .querySelectorAll(".vm-tab")
+          .forEach((t) => t.classList.remove("active"));
+        modal
+          .querySelectorAll(".vm-tab-content")
+          .forEach((t) => t.classList.remove("active"));
+        modal
+          .querySelector(".vm-tab[data-tab='nicks']")
+          .classList.add("active");
+        modal
+          .querySelector(".vm-tab-content[data-tab='nicks']")
+          .classList.add("active");
+        showToast(
+          exists
+            ? `⚠️ Метка "${currentNick}" обновлена`
+            : `✓ Ник "${currentNick}" добавлен`,
+        );
       };
     })();
 
