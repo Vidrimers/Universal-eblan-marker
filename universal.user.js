@@ -961,8 +961,8 @@
                 <button class="vm-btn vm-btn-ghost" id="vmRefresh">🔄 Обновить</button>
             </div>
             <div class="vm-footer" style="margin-top:8px;">
-                <button class="vm-btn vm-btn-success" id="vmExportAll">📥 Экспорт всех сайтов</button>
-                <button class="vm-btn vm-btn-warning" id="vmImportAll">📤 Импорт всех сайтов</button>
+                <button class="vm-btn vm-btn-success" id="vmExportAll">📥 Экспорт всего</button>
+                <button class="vm-btn vm-btn-warning" id="vmImportAll">📤 Импорт всего</button>
                 <button class="vm-btn vm-btn-report" id="vmReport">🐛 Багрепорт</button>
             </div>
         `;
@@ -1070,7 +1070,7 @@
         const banner = modal.querySelector("#vmUpdateBanner");
         const text = modal.querySelector("#vmUpdateText");
         const btn = modal.querySelector("#vmUpdateBtn");
-        if (!banner || !text || !btn) return; // защита
+        if (!banner || !text || !btn) return; // защита от null
         text.textContent = `🆕 Доступно обновление: v${CURRENT_VERSION} → v${remoteVersion}`;
         banner.style.display = "flex";
         btn.onclick = () => window.open(INSTALL_URL, "_blank");
@@ -1622,6 +1622,7 @@
 
     // Refresh
     modal.querySelector("#vmRefresh").onclick = () => location.reload();
+
     // Bug report
     modal.querySelector("#vmReport").onclick = () =>
       window.open(
