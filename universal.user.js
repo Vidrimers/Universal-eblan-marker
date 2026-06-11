@@ -963,7 +963,7 @@
             <div class="vm-footer" style="margin-top:8px;">
                 <button class="vm-btn vm-btn-success" id="vmExportAll">📥 Экспорт всех сайтов</button>
                 <button class="vm-btn vm-btn-warning" id="vmImportAll">📤 Импорт всех сайтов</button>
-                <button class="vm-btn vm-btn-report" id="vmReport" target="_blank">🐛 Багрепорт</button>
+                <button class="vm-btn vm-btn-report" id="vmReport">🐛 Багрепорт</button>
             </div>
         `;
     shadow.appendChild(modal);
@@ -1622,6 +1622,12 @@
 
     // Refresh
     modal.querySelector("#vmRefresh").onclick = () => location.reload();
+    // Bug report
+    modal.querySelector("#vmReport").onclick = () =>
+      window.open(
+        "https://github.com/Vidrimers/Universal-eblan-marker/issues/new?assignees=&labels=bug%2C+needs+triage%2C+universal-marker&template=bug_report.md&title=%5BBUG%5D+%3Cкраткое+описание+проблемы%3E",
+        "_blank",
+      );
   }
 
   // ========== ЗАПУСК ==========
