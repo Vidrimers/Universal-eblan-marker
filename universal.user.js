@@ -10,8 +10,8 @@
 // @grant        GM_listValues
 // @grant        GM_xmlhttpRequest
 // @run-at       document-end
-// @updateURL    https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
-// @downloadURL  https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js
+// @updateURL    https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js
+// @downloadURL  https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js
 // ==/UserScript==
 
 (function () {
