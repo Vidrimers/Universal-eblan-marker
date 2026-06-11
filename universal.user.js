@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    https://github.com/Vidrimers/Universal-eblan-marker
-// @version      6.6.4
+// @version      6.6.6
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @author       Vidrimers
 // @match        *://*/*
@@ -10,6 +10,7 @@
 // @grant        GM_addStyle
 // @grant        GM_listValues
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js
 // @downloadURL  https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js
@@ -911,6 +912,16 @@
                     <input class="vm-input" id="vmNewProfText" placeholder="Текст надписи">
                     <button class="vm-btn vm-btn-primary" id="vmAddProf">+</button>
                 </div>
+                <div id="vmSteamQuickAdd" style="display:none;margin-top:8px;">
+                    <div style="padding:10px 12px;background:rgba(23,111,158,0.12);border:1px solid rgba(23,111,158,0.3);border-radius:10px;">
+                        <div style="font-size:12px;color:#5dade2;margin-bottom:8px;">⚡ Страница Steam — ID определён автоматически</div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span style="font-size:11px;color:#666;" id="vmSteamDetectedId"></span>
+                            <input class="vm-input" id="vmSteamQuickText" placeholder="Метка" style="flex:1;">
+                            <button class="vm-btn vm-btn-primary" id="vmSteamQuickBtn">➕ Добавить</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="vm-tab-content" data-tab="settings">
@@ -1043,8 +1054,64 @@
       modal.classList.remove("open");
     }
 
+    // ========== STEAM QUICK ADD ==========
+    (function initSteamQuickAdd() {
+      // Работаем только на steamcommunity.com
+      if (!location.hostname.includes("steamcommunity.com")) return;
+
+      // Пробуем получить SteamID64 из переменной страницы
+      let steamId64 = null;
+      try {
+        steamId64 = unsafeWindow.g_steamID || null;
+      } catch (e) {}
+
+      // Если g_steamID не нашли — ищем в HTML (data-атрибуты или inline JS)
+      if (!steamId64) {
+        const m = document.documentElement.innerHTML.match(
+          /"steamid"\s*:\s*"(\d{17})"/,
+        );
+        if (m) steamId64 = m[1];
+      }
+
+      if (!steamId64) return; // не страница профиля
+
+      // Показываем блок быстрого добавления
+      const quickBlock = modal.querySelector("#vmSteamQuickAdd");
+      const idLabel = modal.querySelector("#vmSteamDetectedId");
+      const quickText = modal.querySelector("#vmSteamQuickText");
+      const quickBtn = modal.querySelector("#vmSteamQuickBtn");
+
+      if (!quickBlock) return;
+      idLabel.textContent = `SteamID64: ${steamId64}`;
+      quickBlock.style.display = "block";
+
+      quickBtn.onclick = () => {
+        const text = quickText.value.trim();
+        if (!text) return showToast("Укажи метку", true);
+        const exists = !!DATA.profileMessages[steamId64];
+        DATA.profileMessages[steamId64] = text;
+        saveData(DATA);
+        quickText.value = "";
+        renderLists();
+        // Автоматически переключаемся на таб профилей если не там
+        modal
+          .querySelectorAll(".vm-tab")
+          .forEach((t) => t.classList.remove("active"));
+        modal
+          .querySelectorAll(".vm-tab-content")
+          .forEach((t) => t.classList.remove("active"));
+        modal
+          .querySelector(".vm-tab[data-tab='profiles']")
+          .classList.add("active");
+        modal
+          .querySelector(".vm-tab-content[data-tab='profiles']")
+          .classList.add("active");
+        showToast(exists ? `⚠️ Профиль обновлён` : `✓ Профиль добавлен`);
+      };
+    })();
+
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
-    const CURRENT_VERSION = "6.6.4";
+    const CURRENT_VERSION = "6.6.6"; // Мажор.минор.патч — формат для сравнения версий, не меняй его просто так
     const UPDATE_URL =
       "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js";
     const INSTALL_URL =
