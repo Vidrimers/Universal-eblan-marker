@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Universal Eblan Marker
 // @namespace    https://github.com/Vidrimers/Universal-eblan-marker
-// @version      6.6.3
+// @version      6.6.4
 // @description  Универсальная подсветка ников + надписи на профилях. Работает на любом сайте.
 // @author       Vidrimers
 // @match        *://*/*
@@ -938,6 +938,10 @@
                     <span class="vm-setting-label">Паттерны URL для ID (по одному на строку)</span>
                 </div>
                 <textarea class="vm-input" id="vmPatterns" rows="3" style="resize:vertical;margin-top:6px;">${(DATA.settings.userIdPatterns || []).join("\n")}</textarea>
+                <div class="vm-setting-row" style="border-bottom:none;margin-top:14px;">
+                    <span class="vm-setting-label">Версия скрипта: <strong style="color:#a3b1ff;" id="vmCurrentVersion"></strong></span>
+                    <button class="vm-btn vm-btn-ghost" id="vmCheckUpdate" style="font-size:11px;padding:4px 10px;">🔍 Проверить обновления</button>
+                </div>
             </div>
 
             <div class="vm-tab-content" data-tab="help">
@@ -1040,7 +1044,7 @@
     }
 
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
-    const CURRENT_VERSION = "6.6.3";
+    const CURRENT_VERSION = "6.6.4";
     const UPDATE_URL =
       "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js";
     const INSTALL_URL =
@@ -1078,6 +1082,29 @@
         console.warn("[Marker] Ошибка показа баннера:", e);
       }
     }
+
+    // Вставляем текущую версию в настройки
+    const verEl = modal.querySelector("#vmCurrentVersion");
+    if (verEl) verEl.textContent = CURRENT_VERSION;
+
+    // Кнопка принудительной проверки
+    modal.querySelector("#vmCheckUpdate").onclick = () => {
+      const btn = modal.querySelector("#vmCheckUpdate");
+      btn.textContent = "⏳ Проверяем...";
+      btn.disabled = true;
+      // Сбрасываем кеш чтобы force сработал чисто
+      GM_setValue(UPDATE_CHECK_KEY, 0);
+      checkForUpdates(true);
+      setTimeout(() => {
+        btn.textContent = "🔍 Проверить обновления";
+        btn.disabled = false;
+        // Если плашка не появилась — значит обновлений нет
+        const banner = modal.querySelector("#vmUpdateBanner");
+        if (banner && banner.style.display === "none") {
+          showToast("✓ Обновлений нет, версия актуальна");
+        }
+      }, 3000);
+    };
 
     function checkForUpdates(force = false) {
       const lastCheck = GM_getValue(UPDATE_CHECK_KEY, 0);
