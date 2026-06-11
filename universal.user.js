@@ -1034,9 +1034,9 @@
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
     const CURRENT_VERSION = "6.6";
     const UPDATE_URL =
-      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js";
     const INSTALL_URL =
-      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.js";
+      "https://raw.githubusercontent.com/Vidrimers/Universal-eblan-marker/refs/heads/master/universal.user.js";
     const UPDATE_CHECK_KEY = "vm_update_last_check";
     const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // раз в сутки
 
