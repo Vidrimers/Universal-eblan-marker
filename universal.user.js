@@ -23,6 +23,9 @@
   const DOMAIN = location.hostname.replace(/^www\./, "");
   const STORAGE_KEY = `vm_${DOMAIN}`;
   const MARKER_ATTR = "data-vm-marked";
+  const STEAM_PROXY = "http://89.124.70.156:3000/api/steam/names";
+  const STEAM_NICK_CACHE_KEY = "vm_steam_nick_cache";
+  const STEAM_NICK_CACHE_TTL = 24 * 60 * 60 * 1000; // сутки
 
   // ========== ХРАНИЛИЩЕ ==========
   function loadData() {
@@ -147,6 +150,87 @@
   }
 
   let pattern = buildPattern();
+
+  // ── Мониторинг переименований Steam ──
+  // Берём все ники у которых есть steamId64, запрашиваем актуальные имена через прокси,
+  // обновляем базу если кто-то переименовался, перестраиваем паттерн.
+  function syncSteamNicks(onDone) {
+    if (!location.hostname.includes("steamcommunity.com")) {
+      if (onDone) onDone();
+      return;
+    }
+
+    // Собираем ники у которых есть steamId64
+    const toSync = []; // [{nick, steamId64, data}]
+    for (const [nick, v] of Object.entries(DATA.nicknames)) {
+      const d = typeof v === "string" ? { label: v, color: null, note: "", steamId64: null } : v;
+      if (d.steamId64) toSync.push({ nick, steamId64: d.steamId64, data: d });
+    }
+
+    if (!toSync.length) { if (onDone) onDone(); return; }
+
+    // Проверяем кеш
+    const now = Date.now();
+    let cache = {};
+    try { cache = JSON.parse(GM_getValue(STEAM_NICK_CACHE_KEY, "{}")); } catch (e) {}
+
+    const ids = toSync.map(e => e.steamId64);
+    const needFetch = ids.filter(id => !cache[id] || (now - cache[id].ts) > STEAM_NICK_CACHE_TTL);
+
+    function applyUpdates(freshNames) {
+      let changed = false;
+      for (const entry of toSync) {
+        const actualName = freshNames[entry.steamId64] || (cache[entry.steamId64] && cache[entry.steamId64].name);
+        if (!actualName) continue;
+        if (actualName !== entry.nick) {
+          // Ник изменился — переносим запись
+          const d = { ...entry.data, steamId64: entry.steamId64 };
+          delete DATA.nicknames[entry.nick];
+          DATA.nicknames[actualName] = d;
+          changed = true;
+          console.log(`[Marker] Ник обновлён: ${entry.nick} → ${actualName}`);
+        }
+      }
+      if (changed) {
+        saveData(DATA);
+        pattern = buildPattern();
+      }
+      if (onDone) onDone();
+    }
+
+    if (!needFetch.length) {
+      // Всё в кеше
+      const names = {};
+      for (const id of ids) if (cache[id]) names[id] = cache[id].name;
+      applyUpdates(names);
+      return;
+    }
+
+    // Запрашиваем свежие данные
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: STEAM_PROXY + "?ids=" + needFetch.join(","),
+      timeout: 8000,
+      onload(resp) {
+        const names = {};
+        try {
+          const arr = JSON.parse(resp.responseText);
+          for (const item of arr) {
+            if (item.name) {
+              names[item.steamid] = item.name;
+              cache[item.steamid] = { name: item.name, ts: now };
+            }
+          }
+          GM_setValue(STEAM_NICK_CACHE_KEY, JSON.stringify(cache));
+        } catch (e) {}
+        // Добавляем из кеша то что не запрашивали
+        for (const id of ids) if (cache[id] && !names[id]) names[id] = cache[id].name;
+        applyUpdates(names);
+      },
+      onerror() { if (onDone) onDone(); },
+      ontimeout() { if (onDone) onDone(); },
+    });
+  }
 
   function getLabelFor(nick) {
     const d = getNickData(nick);
@@ -914,11 +998,19 @@
                 </div>
                 <div id="vmSteamQuickAdd" style="display:none;margin-top:8px;">
                     <div style="padding:10px 12px;background:rgba(23,111,158,0.12);border:1px solid rgba(23,111,158,0.3);border-radius:10px;">
-                        <div style="font-size:12px;color:#5dade2;margin-bottom:8px;">⚡ Страница Steam — ID определён автоматически</div>
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <span style="font-size:11px;color:#666;" id="vmSteamDetectedId"></span>
-                            <input class="vm-input" id="vmSteamQuickText" placeholder="Метка" style="flex:1;">
-                            <button class="vm-btn vm-btn-primary" id="vmSteamQuickBtn">➕ Добавить</button>
+                        <div style="font-size:12px;color:#5dade2;margin-bottom:8px;">⚡ Страница Steam — данные определены автоматически</div>
+                        <div style="font-size:11px;color:#666;margin-bottom:8px;" id="vmSteamDetectedId"></div>
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                            <input class="vm-input" id="vmSteamQuickText" placeholder="Метка для профиля" style="flex:1;">
+                            <button class="vm-btn vm-btn-primary" id="vmSteamQuickBtn">➕ Профиль</button>
+                        </div>
+                        <div style="border-top:1px solid rgba(23,111,158,0.2);padding-top:8px;">
+                            <div style="font-size:11px;color:#666;margin-bottom:6px;" id="vmSteamNickInfo"></div>
+                            <div id="vmSteamNickRow" style="display:none;flex-direction:row;gap:8px;align-items:center;">
+                                <input class="vm-input" id="vmSteamNickLabel" placeholder="Метка для ника" style="flex:1;">
+                                <input type="color" class="vm-color-pick" id="vmSteamNickColor" title="Цвет метки" style="width:36px;height:32px;flex-shrink:0;">
+                                <button class="vm-btn vm-btn-primary" id="vmSteamNickBtn">➕ Ник</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1059,55 +1151,81 @@
       // Работаем только на steamcommunity.com
       if (!location.hostname.includes("steamcommunity.com")) return;
 
-      // Пробуем получить SteamID64 из переменной страницы
-      let steamId64 = null;
-      try {
-        steamId64 = unsafeWindow.g_steamID || null;
-      } catch (e) {}
+      // g_rgProfileData — данные профиля который открыт (не твои)
+      let profileData = null;
+      try { profileData = unsafeWindow.g_rgProfileData || null; } catch (e) {}
+      if (!profileData || !profileData.steamid) return;
 
-      // Если g_steamID не нашли — ищем в HTML (data-атрибуты или inline JS)
-      if (!steamId64) {
-        const m = document.documentElement.innerHTML.match(
-          /"steamid"\s*:\s*"(\d{17})"/,
-        );
-        if (m) steamId64 = m[1];
-      }
+      const steamId64 = profileData.steamid;
+      const currentNick = profileData.personaname || null;
+      const profileUrl = `https://steamcommunity.com/profiles/${steamId64}/`;
 
-      if (!steamId64) return; // не страница профиля
-
-      // Показываем блок быстрого добавления
       const quickBlock = modal.querySelector("#vmSteamQuickAdd");
       const idLabel = modal.querySelector("#vmSteamDetectedId");
       const quickText = modal.querySelector("#vmSteamQuickText");
       const quickBtn = modal.querySelector("#vmSteamQuickBtn");
+      const nickInfo = modal.querySelector("#vmSteamNickInfo");
+      const nickRow = modal.querySelector("#vmSteamNickRow");
+      const nickLabel = modal.querySelector("#vmSteamNickLabel");
+      const nickColor = modal.querySelector("#vmSteamNickColor");
+      const nickBtn = modal.querySelector("#vmSteamNickBtn");
 
       if (!quickBlock) return;
+
       idLabel.textContent = `SteamID64: ${steamId64}`;
       quickBlock.style.display = "block";
 
+      if (currentNick && nickInfo && nickRow && nickColor) {
+        nickInfo.textContent = `Текущий ник: ${currentNick}`;
+        nickInfo.style.color = "#a3b1ff";
+        nickColor.value = DATA.settings.nickColor;
+        nickRow.style.display = "flex";
+      }
+
+      function switchTab(tabName) {
+        modal.querySelectorAll(".vm-tab").forEach((t) => t.classList.remove("active"));
+        modal.querySelectorAll(".vm-tab-content").forEach((t) => t.classList.remove("active"));
+        modal.querySelector(`.vm-tab[data-tab='${tabName}']`).classList.add("active");
+        modal.querySelector(`.vm-tab-content[data-tab='${tabName}']`).classList.add("active");
+      }
+
+      // ── Добавить профиль ──
       quickBtn.onclick = () => {
         const text = quickText.value.trim();
-        if (!text) return showToast("Укажи метку", true);
+        if (!text) return showToast("Укажи метку для профиля", true);
         const exists = !!DATA.profileMessages[steamId64];
         DATA.profileMessages[steamId64] = text;
         saveData(DATA);
         quickText.value = "";
         renderLists();
-        // Автоматически переключаемся на таб профилей если не там
-        modal
-          .querySelectorAll(".vm-tab")
-          .forEach((t) => t.classList.remove("active"));
-        modal
-          .querySelectorAll(".vm-tab-content")
-          .forEach((t) => t.classList.remove("active"));
-        modal
-          .querySelector(".vm-tab[data-tab='profiles']")
-          .classList.add("active");
-        modal
-          .querySelector(".vm-tab-content[data-tab='profiles']")
-          .classList.add("active");
-        showToast(exists ? `⚠️ Профиль обновлён` : `✓ Профиль добавлен`);
+        switchTab("profiles");
+        showToast(exists ? "Профиль обновлён" : "Профиль добавлен");
       };
+
+      // ── Добавить ник (с steamId64 для мониторинга + заметка со ссылкой) ──
+      if (nickBtn) {
+        nickBtn.onclick = () => {
+          if (!currentNick) return showToast("Ник недоступен", true);
+          const label = nickLabel.value.trim();
+          if (!label) return showToast("Укажи метку для ника", true);
+          const color = nickColor.value;
+          const exists = Object.keys(DATA.nicknames).some(
+            (k) => k.toLowerCase() === currentNick.toLowerCase()
+          );
+          const oldNote = exists ? ((getNickData(currentNick) || {}).note || "") : "";
+          // Если в заметке ещё нет ссылки — добавляем
+          const note = oldNote.includes(profileUrl)
+            ? oldNote
+            : (oldNote ? oldNote + "\n" + profileUrl : profileUrl);
+          DATA.nicknames[currentNick] = { label, color, note, steamId64 };
+          saveData(DATA);
+          pattern = buildPattern();
+          nickLabel.value = "";
+          renderLists();
+          switchTab("nicks");
+          showToast(exists ? `⚠️ Метка "${currentNick}" обновлена` : `✓ Ник "${currentNick}" добавлен`);
+        };
+      }
     })();
 
     // ========== ПРОВЕРКА ОБНОВЛЕНИЙ ==========
@@ -1727,7 +1845,7 @@
 
   // ========== ЗАПУСК ==========
 
-  // Определяем ID пользователя — для Steam используем g_rgProfileData (работает и для vanity URL)
+  // На Steam используем g_rgProfileData для определения ID (работает для vanity URL)
   function getEffectiveUserId() {
     if (location.hostname.includes("steamcommunity.com")) {
       try {
@@ -1743,7 +1861,10 @@
     setTimeout(() => showCenterMessage(DATA.profileMessages[userId]), 300);
   }
 
-  processNode(document.body);
+  // Синхронизируем ники Steam (проверяем переименования) — потом запускаем подсветку
+  syncSteamNicks(() => {
+    processNode(document.body);
+  });
 
   const observer = new MutationObserver((mutations) => {
     for (const mut of mutations) {
