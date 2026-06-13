@@ -996,6 +996,10 @@
                     <input class="vm-input" id="vmNewProfText" placeholder="Текст надписи">
                     <button class="vm-btn vm-btn-primary" id="vmAddProf">+</button>
                 </div>
+                <div class="vm-presets-wrap" style="margin-top:6px;">
+                    <button class="vm-presets-btn" id="vmProfPresetsBtn">▾ Быстрые метки</button>
+                    <div class="vm-presets-list" id="vmProfPresetsList"></div>
+                </div>
                 <div id="vmSteamQuickAdd" style="display:none;margin-top:8px;">
                     <div style="padding:10px 12px;background:rgba(23,111,158,0.12);border:1px solid rgba(23,111,158,0.3);border-radius:10px;">
                         <div style="font-size:12px;color:#5dade2;margin-bottom:8px;">⚡ Страница Steam — данные определены автоматически</div>
@@ -1626,10 +1630,58 @@
       renderPresets();
       modal.querySelector("#vmPresetsList").classList.toggle("open");
     };
+
+    // Presets dropdown для вкладки Профили — те же метки, подставляются в поле текста профиля
+    function renderProfPresets() {
+      const list = modal.querySelector("#vmProfPresetsList");
+      const unique = [
+        ...new Set(
+          Object.values(DATA.nicknames).map((v) =>
+            typeof v === "string" ? v : v.label,
+          ),
+        ),
+      ]
+        .filter(Boolean)
+        .sort();
+      if (!unique.length) {
+        list.innerHTML =
+          '<div style="padding:8px 10px;font-size:12px;color:#555;">Нет сохранённых меток</div>';
+        return;
+      }
+      list.innerHTML = unique
+        .map((lbl) => {
+          let col = DATA.settings.nickColor;
+          for (const [, v] of Object.entries(DATA.nicknames)) {
+            const d = typeof v === "string" ? { label: v, color: null } : v;
+            if (d.label === lbl && d.color) {
+              col = d.color;
+              break;
+            }
+          }
+          return `<div class="vm-preset-item" data-preset-label="${escapeHtml(lbl)}" data-preset-color="${escapeHtml(col)}">
+          <span class="vm-nick-color-dot" style="background:${escapeHtml(col)}"></span>${escapeHtml(lbl)}
+        </div>`;
+        })
+        .join("");
+      list.querySelectorAll(".vm-preset-item").forEach((item) => {
+        item.onclick = () => {
+          modal.querySelector("#vmNewProfText").value = item.dataset.presetLabel;
+          list.classList.remove("open");
+          modal.querySelector("#vmNewProfId").focus();
+        };
+      });
+    }
+    modal.querySelector("#vmProfPresetsBtn").onclick = (e) => {
+      e.stopPropagation();
+      renderProfPresets();
+      modal.querySelector("#vmProfPresetsList").classList.toggle("open");
+    };
+
     // Закрыть список при клике в другое место внутри модалки
     modal.addEventListener("click", (e) => {
       if (!e.target.closest(".vm-presets-wrap")) {
         modal.querySelector("#vmPresetsList").classList.remove("open");
+        modal.querySelector("#vmProfPresetsList").classList.remove("open");
       }
     });
 
